@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0A0A0A;
+  --foreground: #FAFAFA;
+  --font-inter: 'Inter', sans-serif;
+  --font-space-grotesk: 'Space Grotesk', sans-serif;
+}
+
+html.dark {
+  --background: #0A0A0A;
+  --foreground: #FAFAFA;
+}
+
+html:not(.dark) {
+  --background: #FAFAFA;
+  --foreground: #0A0A0A;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3F3F46;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #52525B;
+}
+
+/* Panel utility */
+.glass-panel {
+  background: rgba(20, 20, 20, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gradient-border {
+  position: relative;
+  background: #141414;
+  background-clip: padding-box;
+  border: 1px solid transparent;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  z-index: -1;
+  margin: -1px;
+  border-radius: inherit;
+  background: linear-gradient(to right, #FFFFFF, #52525B);
+}
