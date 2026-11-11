@@ -14,8 +14,8 @@ export default function AudioIsolationPage() {
 
   const cost = 120;
 
-  const handleIsolate = () => {
-    const deducted = deductCredits(cost);
+  const handleIsolate = async () => {
+    const deducted = await deductCredits(cost);
     if (!deducted) return;
 
     setIsProcessing(true);

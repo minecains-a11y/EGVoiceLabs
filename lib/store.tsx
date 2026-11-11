@@ -1,15 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { Voice, Generation, Project, UserProfile } from "./types";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import type { Generation, Project, UserProfile, Voice } from "./types";
+import type { InitialAppData } from "./app-data";
 import { PREMADE_VOICES } from "./mock-data";
 import { generateId } from "./utils";
 
-interface AppContextType {
-  user: UserProfile;
-  voices: Voice[];
-  generations: Generation[];
-  projects: Project[];
+interface AppContextType extends InitialAppData {
   activeProject: Project | null;
   addVoice: (voice: Omit<Voice, "id" | "createdAt">) => Voice;
   deleteVoice: (id: string) => void;
@@ -17,236 +14,205 @@ interface AppContextType {
   addGeneration: (gen: Omit<Generation, "id" | "createdAt">) => Generation;
   deleteGeneration: (id: string) => void;
   toggleFavoriteGeneration: (id: string) => void;
-  deductCredits: (amount: number) => boolean;
-  addCredits: (amount: number) => void;
+  deductCredits: (amount: number) => Promise<boolean>;
   saveProject: (project: Project) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (project: Project | null) => void;
-  updateUserPlan: (plan: UserProfile["plan"]) => void;
+  clearUserContent: () => void;
 }
 
-const DEFAULT_USER: UserProfile = {
-  id: "usr_egvl_dev",
-  name: "Alex Sterling",
-  email: "alex@egvoicelabs.com",
-  plan: "Creator",
-  credits: 8450,
-  maxCredits: 100000,
-  apiKey: "egvl_live_98a7fbc2041289ee0a1734b",
-  createdAt: "2026-01-01T00:00:00.000Z",
-  avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80",
-};
+function stripInlineMedia(section: "voices" | "generations" | "projects", data: unknown) {
+  if (!Array.isArray(data)) return data;
+  const hasInlineUrl = (value: unknown) => typeof value === "string" && /^(data:|blob:)/i.test(value);
 
-const DEFAULT_PROJECTS: Project[] = [
-  {
-    id: "proj_demo_podcast",
-    title: "Sci-Fi Audio Drama - Episode 1",
-    description: "Multitrack mix combining Rachel narrator, lo-fi ambiance, and laser sound effects.",
-    duration: 35,
-    createdAt: "2026-02-10T10:00:00.000Z",
-    updatedAt: "2026-02-11T12:00:00.000Z",
-    tracks: [
-      {
-        id: "tr_1",
-        name: "Voiceover (Rachel)",
-        type: "speech",
-        muted: false,
-        solo: false,
-        volume: 0.9,
-        clips: [
-          {
-            id: "clip_speech_1",
-            title: "Intro Monologue",
-            type: "tts",
-            startTime: 0,
-            duration: 8.5,
-            audioUrl: "",
-            volume: 0.9,
-            color: "#FFFFFF",
-          },
-        ],
-      },
-      {
-        id: "tr_2",
-        name: "Background Music",
-        type: "music",
-        muted: false,
-        solo: false,
-        volume: 0.6,
-        clips: [
-          {
-            id: "clip_music_1",
-            title: "Cyberpunk Ambient",
-            type: "music",
-            startTime: 2,
-            duration: 20,
-            audioUrl: "",
-            volume: 0.6,
-            color: "#A1A1AA",
-          },
-        ],
-      },
-      {
-        id: "tr_3",
-        name: "SFX Layer",
-        type: "sfx",
-        muted: false,
-        solo: false,
-        volume: 0.8,
-        clips: [
-          {
-            id: "clip_sfx_1",
-            title: "Distant Thunder",
-            type: "sfx",
-            startTime: 5,
-            duration: 4.5,
-            audioUrl: "",
-            volume: 0.8,
-            color: "#71717A",
-          },
-        ],
-      },
-    ],
-  },
-];
+  if (section === "voices") {
+    return data.map((item) => {
+      if (!item || typeof item !== "object" || !hasInlineUrl((item as Voice).previewAudioUrl)) return item;
+      const { previewAudioUrl: _previewAudioUrl, ...voice } = item as Voice;
+      return voice;
+    });
+  }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+  if (section === "generations") {
+    return data.map((item) => {
+      if (!item || typeof item !== "object") return item;
+      const generation = item as Generation;
+      return hasInlineUrl(generation.audioUrl) ? { ...generation, audioUrl: "" } : generation;
+    });
+  }
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
-  const [voices, setVoices] = useState<Voice[]>(PREMADE_VOICES);
-  const [generations, setGenerations] = useState<Generation[]>([]);
-  const [projects, setProjects] = useState<Project[]>(DEFAULT_PROJECTS);
-  const [activeProject, setActiveProject] = useState<Project | null>(DEFAULT_PROJECTS[0]);
+  return data.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const project = item as Project;
+    return {
+      ...project,
+      tracks: project.tracks?.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) =>
+          hasInlineUrl(clip.audioUrl) ? { ...clip, audioUrl: "" } : clip,
+        ),
+      })),
+    };
+  });
+}
 
-  // Load from LocalStorage on mount
+async function persistSection(section: "voices" | "generations" | "projects", data: unknown) {
+  const response = await fetch("/api/app-data", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ section, data: stripInlineMedia(section, data) }),
+  });
+  if (!response.ok) {
+    throw new Error("Your changes could not be saved. Please sign in again and retry.");
+  }
+}
+
+export function AppProvider({
+  children,
+  initialData,
+}: {
+  children: React.ReactNode;
+  initialData: InitialAppData;
+}) {
+  const [user, setUser] = useState<UserProfile | null>(initialData.user);
+  const [voices, setVoices] = useState<Voice[]>(initialData.voices);
+  const [generations, setGenerations] = useState<Generation[]>(initialData.generations);
+  const [projects, setProjects] = useState<Project[]>(initialData.projects);
+  const [activeProject, setCurrentActiveProject] = useState<Project | null>(initialData.projects[0] ?? null);
+  const userIdRef = useRef(initialData.user?.id ?? null);
+
   useEffect(() => {
-    try {
-      const savedUser = localStorage.getItem("egvl_user");
-      if (savedUser) setUser(JSON.parse(savedUser));
-
-      const savedVoices = localStorage.getItem("egvl_custom_voices");
-      if (savedVoices) {
-        const parsed = JSON.parse(savedVoices);
-        setVoices([...PREMADE_VOICES, ...parsed]);
-      }
-
-      const savedGens = localStorage.getItem("egvl_generations");
-      if (savedGens) setGenerations(JSON.parse(savedGens));
-
-      const savedProjs = localStorage.getItem("egvl_projects");
-      if (savedProjs) setProjects(JSON.parse(savedProjs));
-    } catch (e) {
-      console.warn("Could not load persisted EGVL state:", e);
+    const nextUserId = initialData.user?.id ?? null;
+    setUser(initialData.user);
+    if (userIdRef.current !== nextUserId) {
+      userIdRef.current = nextUserId;
+      setVoices(initialData.voices);
+      setGenerations(initialData.generations);
+      setProjects(initialData.projects);
+      setCurrentActiveProject(initialData.projects[0] ?? null);
     }
-  }, []);
+  }, [initialData]);
 
-  // Save changes helper
-  const persistUser = (u: UserProfile) => {
-    setUser(u);
-    localStorage.setItem("egvl_user", JSON.stringify(u));
-  };
-
-  const deductCredits = (amount: number): boolean => {
-    if (user.credits < amount) {
-      alert(`Insufficient credits! You need ${amount} credits, but have ${user.credits}. Please upgrade or top up.`);
-      return false;
-    }
-    const updated = { ...user, credits: user.credits - amount };
-    persistUser(updated);
-    return true;
-  };
-
-  const addCredits = (amount: number) => {
-    const updated = { ...user, credits: user.credits + amount };
-    persistUser(updated);
-  };
-
-  const updateUserPlan = (plan: UserProfile["plan"]) => {
-    const limits: Record<UserProfile["plan"], number> = {
-      Free: 10000,
-      Starter: 30000,
-      Creator: 100000,
-      Pro: 500000,
-    };
-    const updated: UserProfile = {
-      ...user,
-      plan,
-      maxCredits: limits[plan],
-      credits: Math.max(user.credits, limits[plan] / 2),
-    };
-    persistUser(updated);
+  const save = (section: "voices" | "generations" | "projects", data: unknown) => {
+    if (!user) return;
+    void persistSection(section, data).catch(() => {
+      window.alert("Your changes could not be saved. Please sign in again and retry.");
+    });
   };
 
   const addVoice = (voiceData: Omit<Voice, "id" | "createdAt">): Voice => {
     const newVoice: Voice = {
       ...voiceData,
+      ...(user ? { ownerId: user.id } : {}),
       id: generateId("v_custom"),
       createdAt: new Date().toISOString(),
     };
     const updated = [newVoice, ...voices];
     setVoices(updated);
-    // Persist custom voices only
-    const customVoices = updated.filter((v) => v.category !== "premade");
-    localStorage.setItem("egvl_custom_voices", JSON.stringify(customVoices));
+    save("voices", updated);
     return newVoice;
   };
 
   const deleteVoice = (id: string) => {
-    const updated = voices.filter((v) => v.id !== id);
+    const updated = voices.filter((voice) => voice.id !== id);
     setVoices(updated);
-    const customVoices = updated.filter((v) => v.category !== "premade");
-    localStorage.setItem("egvl_custom_voices", JSON.stringify(customVoices));
+    save("voices", updated);
   };
 
   const toggleFavoriteVoice = (id: string) => {
-    const updated = voices.map((v) => (v.id === id ? { ...v, isFavorite: !v.isFavorite } : v));
+    const updated = voices.map((voice) =>
+      voice.id === id ? { ...voice, isFavorite: !voice.isFavorite } : voice,
+    );
     setVoices(updated);
+    save("voices", updated);
   };
 
-  const addGeneration = (genData: Omit<Generation, "id" | "createdAt">): Generation => {
-    const newGen: Generation = {
-      ...genData,
+  const addGeneration = (generationData: Omit<Generation, "id" | "createdAt">): Generation => {
+    const newGeneration: Generation = {
+      ...generationData,
       id: generateId("gen"),
       createdAt: new Date().toISOString(),
     };
-    const updated = [newGen, ...generations];
+    const updated = [newGeneration, ...generations];
     setGenerations(updated);
-    localStorage.setItem("egvl_generations", JSON.stringify(updated));
-    return newGen;
+    save("generations", updated);
+    return newGeneration;
   };
 
   const deleteGeneration = (id: string) => {
-    const updated = generations.filter((g) => g.id !== id);
+    const updated = generations.filter((generation) => generation.id !== id);
     setGenerations(updated);
-    localStorage.setItem("egvl_generations", JSON.stringify(updated));
+    save("generations", updated);
   };
 
   const toggleFavoriteGeneration = (id: string) => {
-    const updated = generations.map((g) => (g.id === id ? { ...g, isFavorite: !g.isFavorite } : g));
+    const updated = generations.map((generation) =>
+      generation.id === id ? { ...generation, isFavorite: !generation.isFavorite } : generation,
+    );
     setGenerations(updated);
-    localStorage.setItem("egvl_generations", JSON.stringify(updated));
+    save("generations", updated);
+  };
+
+  const deductCredits = async (amount: number) => {
+    if (!user) {
+      window.location.assign("/login");
+      return false;
+    }
+    if (!Number.isSafeInteger(amount) || amount <= 0) return false;
+
+    let response: Response;
+    try {
+      response = await fetch("/api/app-data/credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+    } catch {
+      window.alert("Credits could not be verified. Please try again.");
+      return false;
+    }
+
+    const result = (await response.json().catch(() => null)) as
+      | { credits?: number; error?: string }
+      | null;
+    if (!response.ok || typeof result?.credits !== "number") {
+      window.alert(result?.error ?? "Credits could not be verified. Please try again.");
+      return false;
+    }
+
+    setUser((current) => (current ? { ...current, credits: result.credits! } : current));
+    return true;
   };
 
   const saveProject = (project: Project) => {
-    const exists = projects.some((p) => p.id === project.id);
-    let updated: Project[];
-    if (exists) {
-      updated = projects.map((p) => (p.id === project.id ? { ...project, updatedAt: new Date().toISOString() } : p));
-    } else {
-      updated = [{ ...project, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, ...projects];
+    if (!user) {
+      window.location.assign("/login");
+      return;
     }
+    const exists = projects.some((item) => item.id === project.id);
+    const now = new Date().toISOString();
+    const updated = exists
+      ? projects.map((item) =>
+          item.id === project.id ? { ...project, updatedAt: now } : item,
+        )
+      : [{ ...project, createdAt: now, updatedAt: now }, ...projects];
     setProjects(updated);
-    localStorage.setItem("egvl_projects", JSON.stringify(updated));
+    save("projects", updated);
   };
 
   const deleteProject = (id: string) => {
-    const updated = projects.filter((p) => p.id !== id);
+    const updated = projects.filter((project) => project.id !== id);
     setProjects(updated);
-    localStorage.setItem("egvl_projects", JSON.stringify(updated));
-    if (activeProject?.id === id) {
-      setActiveProject(updated[0] || null);
-    }
+    save("projects", updated);
+    if (activeProject?.id === id) setCurrentActiveProject(updated[0] ?? null);
+  };
+
+  const clearUserContent = () => {
+    const customVoices = voices.filter((voice) => voice.category === "premade");
+    setVoices(customVoices);
+    setGenerations([]);
+    save("voices", customVoices);
+    save("generations", []);
   };
 
   return (
@@ -264,11 +230,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteGeneration,
         toggleFavoriteGeneration,
         deductCredits,
-        addCredits,
         saveProject,
         deleteProject,
-        setActiveProject,
-        updateUserPlan,
+        setActiveProject: setCurrentActiveProject,
+        clearUserContent,
       }}
     >
       {children}
@@ -276,10 +241,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
 export function useAppStore() {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error("useAppStore must be used within an AppProvider");
-  }
+  if (!context) throw new Error("useAppStore must be used within an AppProvider");
   return context;
 }

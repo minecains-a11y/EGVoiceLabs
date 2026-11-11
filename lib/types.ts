@@ -95,7 +95,6 @@ export interface UserProfile {
   plan: 'Free' | 'Starter' | 'Creator' | 'Pro';
   credits: number;
   maxCredits: number;
-  apiKey: string;
   createdAt: string;
   avatar?: string;
 }

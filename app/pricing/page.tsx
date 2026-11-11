@@ -6,7 +6,7 @@ import { Check, Zap, Sparkles, ShieldCheck, ArrowRight, HelpCircle } from "lucid
 import Link from "next/link";
 
 export default function PricingPage() {
-  const { user, updateUserPlan } = useAppStore();
+  const { user } = useAppStore();
 
   const plans = [
     {
@@ -113,14 +113,14 @@ export default function PricingPage() {
           Predictable, Credit-Based Plans
         </h1>
         <p className="text-sm text-zinc-400">
-          Scale smoothly from early prototype to global audio production. Change or cancel your plan at any time.
+          Compare credit tiers for your workflow. Paid plan checkout is not enabled yet.
         </p>
       </div>
 
       {/* Pricing Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {plans.map((p) => {
-          const isCurrent = user.plan === p.tier;
+          const isCurrent = user?.plan === p.tier;
           return (
             <div
               key={p.name}
@@ -165,19 +165,21 @@ export default function PricingPage() {
                 </div>
               </div>
 
-              <button
-                onClick={() => updateUserPlan(p.tier)}
-                disabled={isCurrent}
-                className={`w-full py-3 rounded-xl font-bold text-xs mt-8 transition-all ${
-                  isCurrent
-                    ? "bg-zinc-800 text-zinc-400 cursor-default"
-                    : p.popular
-                    ? "bg-white text-black shadow-lg shadow-brand-violet/25 hover:scale-105 active:scale-95"
-                    : "bg-zinc-800 hover:bg-zinc-700 text-white"
-                }`}
-              >
-                {isCurrent ? "Active Plan" : p.buttonText}
-              </button>
+              {user ? (
+                <button
+                  disabled
+                  aria-label={isCurrent ? `${p.name} is your active plan` : "Billing is not enabled"}
+                  className={`w-full py-3 rounded-xl font-bold text-xs mt-8 transition-all ${
+                    isCurrent ? "bg-zinc-800 text-zinc-400 cursor-default" : "bg-zinc-900 text-zinc-500 cursor-not-allowed"
+                  }`}
+                >
+                  {isCurrent ? "Active Plan" : "Billing setup required"}
+                </button>
+              ) : (
+                <Link href="/signup" className="block w-full py-3 rounded-xl font-bold text-xs mt-8 text-center bg-white text-black hover:bg-zinc-200 transition-colors">
+                  Create a free account
+                </Link>
+              )}
             </div>
           );
         })}

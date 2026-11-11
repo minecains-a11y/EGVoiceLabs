@@ -20,6 +20,16 @@ import Link from "next/link";
 export default function DashboardPage() {
   const { user, generations, voices } = useAppStore();
 
+  if (!user) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto py-16 text-center">
+        <h1 className="text-2xl font-bold font-heading text-white">Your workspace awaits</h1>
+        <p className="mt-2 text-sm text-zinc-400">Sign in to see your saved usage and studio history.</p>
+        <Link href="/login" className="inline-flex mt-5 px-4 py-2 rounded-xl bg-white text-black text-sm font-semibold">Sign in</Link>
+      </div>
+    );
+  }
+
   const ttsCount = generations.filter((g) => g.type === "tts").length;
   const musicCount = generations.filter((g) => g.type === "music").length;
   const sfxCount = generations.filter((g) => g.type === "sfx").length;

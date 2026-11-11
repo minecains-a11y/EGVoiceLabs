@@ -94,7 +94,7 @@ export default function VoiceCloningStudio() {
     ]);
   };
 
-  const handleStartCloneFlow = () => {
+  const handleStartCloneFlow = async () => {
     setModerationError(null);
 
     if (!voiceName.trim()) {
@@ -121,7 +121,7 @@ export default function VoiceCloningStudio() {
     }
 
     // Deduct credits and begin training
-    const deducted = deductCredits(cloneCost);
+    const deducted = await deductCredits(cloneCost);
     if (!deducted) return;
 
     setIsTraining(true);

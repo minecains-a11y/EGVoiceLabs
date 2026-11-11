@@ -197,7 +197,7 @@ export function WaveformPlayer({
     <div
       className={`relative p-4 rounded-2xl bg-[#141414]/90 border border-zinc-800/90 shadow-xl backdrop-blur-md transition-all ${className}`}
     >
-      <audio ref={audioRef} src={audioUrl} preload="auto" />
+      <audio ref={audioRef} src={audioUrl || undefined} preload="auto" />
 
       {/* Track info header */}
       {(title || subtitle) && (
@@ -234,6 +234,12 @@ export function WaveformPlayer({
           style={{ left: `${(currentTime / (totalDuration || 1)) * 100}%` }}
         />
       </div>
+
+      {!audioUrl && (
+        <p role="status" className="mb-3 text-[11px] text-zinc-500">
+          This saved record has no stored audio file.
+        </p>
+      )}
 
       {/* Controls Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 text-zinc-300">

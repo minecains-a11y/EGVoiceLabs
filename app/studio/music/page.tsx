@@ -51,7 +51,7 @@ export default function MusicGeneratorStudio() {
 
   const musicCost = 200;
 
-  const handleGenerateMusic = () => {
+  const handleGenerateMusic = async () => {
     if (!prompt.trim()) return;
     setModerationError(null);
 
@@ -63,7 +63,7 @@ export default function MusicGeneratorStudio() {
     }
 
     // 2. Deduct credits
-    const deducted = deductCredits(musicCost);
+    const deducted = await deductCredits(musicCost);
     if (!deducted) return;
 
     setIsGenerating(true);

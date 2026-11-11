@@ -17,8 +17,8 @@ export default function VideoDubbingStudio() {
 
   const cost = 300;
 
-  const handleDubVideo = () => {
-    const deducted = deductCredits(cost);
+  const handleDubVideo = async () => {
+    const deducted = await deductCredits(cost);
     if (!deducted) return;
 
     setIsProcessing(true);

@@ -19,8 +19,8 @@ export default function VoiceChangerStudio() {
 
   const cost = 150;
 
-  const handleConvert = () => {
-    const deducted = deductCredits(cost);
+  const handleConvert = async () => {
+    const deducted = await deductCredits(cost);
     if (!deducted) return;
 
     setIsProcessing(true);

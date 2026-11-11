@@ -2,29 +2,13 @@
 
 import React, { useState } from "react";
 import { useAppStore } from "@/lib/store";
-import {
-  FileText,
-  Code2,
-  Copy,
-  Check,
-  Terminal,
-  Zap,
-  ShieldCheck,
-} from "lucide-react";
+import { Code2 } from "lucide-react";
 
 export default function ApiDocsPage() {
   const { user } = useAppStore();
   const [selectedLang, setSelectedLang] = useState<"curl" | "python" | "typescript">("curl");
-  const [copiedKey, setCopiedKey] = useState(false);
-
-  const copyKey = () => {
-    navigator.clipboard.writeText(user.apiKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
-  };
-
   const curlSnippet = `curl -X POST "https://api.egvoicelabs.com/v1/text-to-speech" \\
-  -H "Authorization: Bearer ${user.apiKey}" \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "text": "Hello from EGVoiceLabs API!",
@@ -38,7 +22,7 @@ export default function ApiDocsPage() {
 
 url = "https://api.egvoicelabs.com/v1/text-to-speech"
 headers = {
-    "Authorization": "Bearer ${user.apiKey}",
+    "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
 }
 payload = {
@@ -55,7 +39,7 @@ with open("speech.wav", "wb") as f:
   const tsSnippet = `import { EGVLClient } from "@egvl/sdk";
 
 const egvl = new EGVLClient({
-  apiKey: "${user.apiKey}"
+  apiKey: "YOUR_API_KEY"
 });
 
 const audio = await egvl.tts.generate({
@@ -78,29 +62,18 @@ await audio.save("./speech.wav");`;
           Developer API & Integration Guide
         </h1>
         <p className="text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
-          Synthesize voices, trigger voice cloning runs, compose background music, and detect watermarks programmatically.
+          Example integration patterns for a future EGVL API. These endpoints are not currently connected to a production synthesis service.
         </p>
       </div>
 
-      {/* API Key Box */}
-      <div className="p-5 rounded-2xl bg-[#141414] border border-zinc-800 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-            Your Active Secret API Key
-          </span>
-          <span className="text-[11px] text-brand-cyan font-mono">Tier: {user.plan}</span>
+      <div className="p-5 rounded-2xl bg-[#141414] border border-zinc-800 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">API access</span>
+          <span className="text-[11px] text-brand-cyan font-mono">Tier: {user?.plan ?? "Free"}</span>
         </div>
-
-        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800">
-          <code className="text-xs text-white font-mono truncate">{user.apiKey}</code>
-          <button
-            onClick={copyKey}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 transition-colors shrink-0"
-          >
-            {copiedKey ? <Check className="w-3.5 h-3.5 text-zinc-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedKey ? "Copied" : "Copy Key"}</span>
-          </button>
-        </div>
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          API credentials and public API endpoints are not enabled yet. The examples below are illustrative and use the placeholder <code className="text-zinc-200">YOUR_API_KEY</code>.
+        </p>
       </div>
 
       {/* Code Examples Section */}

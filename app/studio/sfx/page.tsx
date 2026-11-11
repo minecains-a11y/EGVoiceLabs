@@ -41,7 +41,7 @@ export default function SoundEffectsStudio() {
 
   const sfxCost = 80;
 
-  const handleGenerateSFX = () => {
+  const handleGenerateSFX = async () => {
     if (!prompt.trim()) return;
     setModerationError(null);
 
@@ -53,7 +53,7 @@ export default function SoundEffectsStudio() {
     }
 
     // 2. Deduct credits
-    const deducted = deductCredits(sfxCost);
+    const deducted = await deductCredits(sfxCost);
     if (!deducted) return;
 
     setIsGenerating(true);

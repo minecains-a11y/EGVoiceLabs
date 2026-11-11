@@ -49,8 +49,8 @@ function VoiceDesignerStudio() {
 
   const designCost = 100;
 
-  const handleGenerateVariations = () => {
-    const deducted = deductCredits(designCost);
+  const handleGenerateVariations = async () => {
+    const deducted = await deductCredits(designCost);
     if (!deducted) return;
 
     setIsGenerating(true);

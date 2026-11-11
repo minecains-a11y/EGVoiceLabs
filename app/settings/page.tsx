@@ -1,252 +1,164 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
-import {
-  User,
-  CreditCard,
-  Key,
-  ShieldCheck,
-  Trash2,
-  Download,
-  Check,
-  RefreshCw,
-  AlertTriangle,
-} from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+import { Key, Trash2, Download } from "lucide-react";
 import Link from "next/link";
 
 export default function SettingsPage() {
-  const { user, voices, generations } = useAppStore();
-
+  const router = useRouter();
+  const { user, voices, generations, projects, clearUserContent } = useAppStore();
   const [activeTab, setActiveTab] = useState<"profile" | "billing" | "apikeys" | "privacy">("profile");
-  const [apiKey, setApiKey] = useState(user.apiKey);
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
+  const [name, setName] = useState(user?.name ?? "");
   const [savedProfile, setSavedProfile] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const rotateKey = () => {
-    const newKey = `egvl_live_${Math.random().toString(36).substring(2, 14)}_${Date.now().toString(36)}`;
-    setApiKey(newKey);
-    alert("New API key generated successfully! Update your client applications.");
+  useEffect(() => {
+    if (user) setName(user.name);
+  }, [user?.id, user?.name]);
+
+  const handleSaveProfile = async () => {
+    const cleanName = name.trim();
+    if (!cleanName || cleanName.length > 100) return;
+    setIsSaving(true);
+    const result = await authClient.updateUser({ name: cleanName });
+    setIsSaving(false);
+    if (result.error) {
+      window.alert("Your profile could not be updated. Please try again.");
+      return;
+    }
+    setSavedProfile(true);
+    router.refresh();
+    window.setTimeout(() => setSavedProfile(false), 2000);
   };
 
   const handleExportData = () => {
+    if (!user) return;
     const exportObject = {
-      user,
-      voices: voices.filter((v) => v.category !== "premade"),
+      user: { id: user.id, name: user.name, email: user.email, plan: user.plan },
+      voices: voices.filter((voice) => voice.category !== "premade"),
       generations,
+      projects,
       exportedAt: new Date().toISOString(),
-      gdprCompliance: "Standard Data Subject Export Protocol",
     };
-    const jsonStr = JSON.stringify(exportObject, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `egvl-user-data-export-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `egvl-user-data-${Date.now()}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   };
 
   const handleDeleteAllVoiceData = () => {
-    const confirmText = prompt("Type 'DELETE' to confirm permanent erasure of all custom voices and training recordings:");
-    if (confirmText === "DELETE") {
-      localStorage.removeItem("egvl_custom_voices");
-      localStorage.removeItem("egvl_generations");
-      alert("All custom voice models and recordings have been permanently erased from EGVL storage.");
-      window.location.reload();
+    if (window.confirm("Delete your custom voices and generation history from this account?")) {
+      clearUserContent();
     }
   };
 
+  if (!user) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto py-16 text-center">
+        <h1 className="text-2xl font-bold font-heading text-white">Account settings</h1>
+        <p className="mt-2 text-sm text-zinc-400">Sign in to manage your account and saved data.</p>
+        <Link href="/login" className="inline-flex mt-5 px-4 py-2 rounded-xl bg-white text-black text-sm font-semibold">Sign in</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 py-10">
-      {/* Header */}
       <div className="border-b border-zinc-800 pb-5">
         <h1 className="text-3xl font-bold font-heading text-white">Settings & Account Control</h1>
-        <p className="text-xs text-zinc-400 mt-1">
-          Manage your personal profile, subscription billing, API credentials, and GDPR privacy settings.
-        </p>
+        <p className="text-xs text-zinc-400 mt-1">Manage your profile, account access, and saved studio data.</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex rounded-xl bg-zinc-900 p-1 border border-zinc-800 text-xs w-fit">
-        <button
-          onClick={() => setActiveTab("profile")}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
-            activeTab === "profile" ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-white"
-          }`}
-        >
-          Profile
-        </button>
-        <button
-          onClick={() => setActiveTab("billing")}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
-            activeTab === "billing" ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-white"
-          }`}
-        >
-          Billing & Subscription
-        </button>
-        <button
-          onClick={() => setActiveTab("apikeys")}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
-            activeTab === "apikeys" ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-white"
-          }`}
-        >
-          API Keys
-        </button>
-        <button
-          onClick={() => setActiveTab("privacy")}
-          className={`px-4 py-2 rounded-lg font-medium transition-all ${
-            activeTab === "privacy" ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-white"
-          }`}
-        >
-          Data & Privacy (GDPR)
-        </button>
+      <div className="flex flex-wrap rounded-xl bg-zinc-900 p-1 border border-zinc-800 text-xs w-fit" role="tablist" aria-label="Account settings">
+        {([
+          ["profile", "Profile"],
+          ["billing", "Billing & Subscription"],
+          ["apikeys", "API Keys"],
+          ["privacy", "Data & Privacy"],
+        ] as const).map(([tab, label]) => (
+          <button key={tab} role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-lg font-medium transition-all ${activeTab === tab ? "bg-zinc-800 text-white font-semibold" : "text-zinc-400 hover:text-white"}`}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* TAB 1: PROFILE */}
       {activeTab === "profile" && (
-        <div className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-4 max-w-xl">
-          <h3 className="font-heading font-bold text-sm text-white">Personal Information</h3>
-
+        <section className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-4 max-w-xl" role="tabpanel">
+          <h2 className="font-heading font-bold text-sm text-white">Personal Information</h2>
           <div className="space-y-3 text-xs">
             <div>
-              <label className="block text-zinc-400 mb-1">Full Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-brand-violet"
-              />
+              <label htmlFor="profile-name" className="block text-zinc-400 mb-1">Full Name</label>
+              <input id="profile-name" type="text" maxLength={100} value={name} onChange={(event) => setName(event.target.value)} className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-brand-violet" />
             </div>
-
             <div>
-              <label className="block text-zinc-400 mb-1">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-brand-violet"
-              />
+              <label htmlFor="profile-email" className="block text-zinc-400 mb-1">Email Address</label>
+              <input id="profile-email" type="email" value={user.email} readOnly className="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400" />
+              <p className="mt-1 text-[11px] text-zinc-500">Email changes require a separate verification flow.</p>
             </div>
           </div>
-
-          <button
-            onClick={() => {
-              setSavedProfile(true);
-              setTimeout(() => setSavedProfile(false), 2000);
-            }}
-            className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors"
-          >
-            {savedProfile ? "Saved Successfully!" : "Save Changes"}
+          <button onClick={handleSaveProfile} disabled={isSaving || !name.trim()} className="px-4 py-2 rounded-xl bg-white text-black text-xs font-semibold hover:bg-zinc-200 disabled:opacity-50">
+            {isSaving ? "Saving…" : savedProfile ? "Saved" : "Save Changes"}
           </button>
-        </div>
+        </section>
       )}
 
-      {/* TAB 2: BILLING */}
       {activeTab === "billing" && (
-        <div className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-4 max-w-xl">
-          <h3 className="font-heading font-bold text-sm text-white">Active Subscription</h3>
-
-          <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-between">
+        <section className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-4 max-w-xl" role="tabpanel">
+          <h2 className="font-heading font-bold text-sm text-white">Subscription</h2>
+          <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-between gap-3">
             <div>
               <span className="text-xs font-semibold text-white block">{user.plan} Plan</span>
-              <span className="text-[11px] text-zinc-400">Renews on the 1st of each month</span>
+              <span className="text-[11px] text-zinc-400">Your current account tier and credit balance are stored in Neon.</span>
             </div>
-            <Link
-              href="/pricing"
-              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-white font-medium transition-colors"
-            >
-              Change Plan
-            </Link>
+            <Link href="/pricing" className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-white font-medium">View Plans</Link>
           </div>
-
-          <div className="pt-2">
-            <span className="text-xs font-semibold text-zinc-300 block mb-2">Payment Method</span>
-            <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-between text-xs text-zinc-300">
-              <div className="flex items-center gap-2.5">
-                <CreditCard className="w-4 h-4 text-brand-cyan" />
-                <span>Mastercard ending in •••• 4242</span>
-              </div>
-              <span className="text-[11px] text-zinc-500">Exp 08/28</span>
-            </div>
-          </div>
-        </div>
+          <p className="text-xs text-zinc-500">Paid subscriptions and payment methods are not connected yet.</p>
+        </section>
       )}
 
-      {/* TAB 3: API KEYS */}
       {activeTab === "apikeys" && (
-        <div className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-4 max-w-xl">
-          <div className="flex items-center justify-between">
-            <h3 className="font-heading font-bold text-sm text-white">Production API Key</h3>
-            <button
-              onClick={rotateKey}
-              className="flex items-center gap-1 text-[11px] text-brand-cyan hover:underline"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Rotate Secret Key</span>
-            </button>
+        <section className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-3 max-w-xl" role="tabpanel">
+          <h2 className="font-heading font-bold text-sm text-white">API Access</h2>
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-zinc-950 border border-zinc-800/80">
+            <Key className="w-4 h-4 text-zinc-400 mt-0.5" aria-hidden="true" />
+            <p className="text-xs text-zinc-400 leading-relaxed">API keys are not enabled for this account yet. Your sign-in session is never used as an API key.</p>
           </div>
-
-          <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono">
-            <span className="text-zinc-200 truncate">{apiKey}</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(apiKey);
-                setCopiedKey(true);
-                setTimeout(() => setCopiedKey(false), 2000);
-              }}
-              className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white shrink-0 text-[11px]"
-            >
-              {copiedKey ? "Copied" : "Copy"}
-            </button>
-          </div>
-          <p className="text-[11px] text-zinc-500">
-            Never expose this key in client-side code or public GitHub repositories.
-          </p>
-        </div>
+        </section>
       )}
 
-      {/* TAB 4: GDPR & PRIVACY */}
       {activeTab === "privacy" && (
-        <div className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-5 max-w-2xl">
+        <section className="p-6 rounded-2xl bg-[#141414] border border-zinc-800 space-y-5 max-w-2xl" role="tabpanel">
           <div>
-            <h3 className="font-heading font-bold text-sm text-white">GDPR & Data Ownership</h3>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              You own all intellectual property rights to your generated content and uploaded voice recordings.
-            </p>
+            <h2 className="font-heading font-bold text-sm text-white">Data & Privacy</h2>
+            <p className="text-xs text-zinc-400 mt-1">Your account&apos;s studio records are scoped to your authenticated user ID. Generated audio previews remain in the current browser session.</p>
           </div>
-
-          <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-center justify-between gap-3">
             <div>
-              <span className="text-xs font-semibold text-white block">Export Complete Data Archive</span>
-              <span className="text-[11px] text-zinc-500">Download a JSON archive of all voices, history, and metadata.</span>
+              <span className="text-xs font-semibold text-white block">Export account data</span>
+              <span className="text-[11px] text-zinc-500">Download your profile, custom voices, history, and projects. Audio media itself is not stored yet.</span>
             </div>
-            <button
-              onClick={handleExportData}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition-colors shrink-0"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export JSON</span>
+            <button onClick={handleExportData} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold shrink-0">
+              <Download className="w-3.5 h-3.5" aria-hidden="true" /><span>Export JSON</span>
             </button>
           </div>
-
-          <div className="p-4 rounded-xl bg-zinc-500/10 border border-zinc-500/30 flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 flex items-center justify-between gap-3">
             <div>
-              <span className="text-xs font-semibold text-zinc-300 block">Permanently Erase All Voice Data</span>
-              <span className="text-[11px] text-zinc-400/80">Immediately purges all custom cloned weights, voice samples, and history.</span>
+              <span className="text-xs font-semibold text-white block">Delete custom voices and generation history</span>
+              <span className="text-[11px] text-zinc-400">This removes these records from your Neon account data.</span>
             </div>
-            <button
-              onClick={handleDeleteAllVoiceData}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-600 hover:bg-zinc-700 text-white text-xs font-semibold transition-colors shrink-0"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Erase Voice Data</span>
+            <button onClick={handleDeleteAllVoiceData} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-200 text-xs font-semibold shrink-0">
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /><span>Delete data</span>
             </button>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

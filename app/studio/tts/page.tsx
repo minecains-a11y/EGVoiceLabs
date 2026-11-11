@@ -66,7 +66,7 @@ export default function TextToSpeechStudio() {
     setText((prev) => `${prev} ${tag} `);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!text.trim()) return;
     setModerationError(null);
 
@@ -78,7 +78,7 @@ export default function TextToSpeechStudio() {
     }
 
     // 2. Credit check and deduction
-    const deducted = deductCredits(estimatedCost);
+    const deducted = await deductCredits(estimatedCost);
     if (!deducted) return;
 
     setIsGenerating(true);
