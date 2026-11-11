@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { VoicePicker } from "@/components/voice-picker";
 import { WaveformPlayer } from "@/components/waveform-player";
 import { PREMADE_VOICES, SUPPORTED_LANGUAGES } from "@/lib/mock-data";
 import { Voice, Generation } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
-import { synthesizeTTSVoice } from "@/lib/audio-synth";
+import { requestSpeech, SpeechRequestError, TTS_MODEL_NAME } from "@/lib/tts-client";
+import { VoicePreviewButton } from "@/components/voice-preview-button";
 import { moderateText } from "@/lib/moderation";
 import {
   Sparkles,
@@ -24,7 +25,7 @@ import {
 } from "lucide-react";
 
 export default function TextToSpeechStudio() {
-  const { voices, generations, addGeneration, deleteGeneration, toggleFavoriteGeneration, deductCredits } = useAppStore();
+  const { voices, generations, addGeneration, deleteGeneration, toggleFavoriteGeneration, syncCreditBalance } = useAppStore();
 
   // Voice Selection
   const [selectedVoice, setSelectedVoice] = useState<Voice>(voices[0] || PREMADE_VOICES[0]);
@@ -34,21 +35,16 @@ export default function TextToSpeechStudio() {
     "In the quiet corners of the laboratory, the neural synthesizer began humming with electric resonance. Every frequency was calibrated to perfection."
   );
 
-  // Model & Language
-  const [model, setModel] = useState<"EGVL Turbo" | "EGVL Multilingual">("EGVL Multilingual");
   const [language, setLanguage] = useState<string>("auto");
-
-  // Advanced Voice Settings Sliders
-  const [stability, setStability] = useState<number>(0.75); // 0 to 1
-  const [similarity, setSimilarity] = useState<number>(0.85); // 0 to 1
-  const [styleExaggeration, setStyleExaggeration] = useState<number>(0.15); // 0 to 1
-  const [speed, setSpeed] = useState<number>(1.0); // 0.7 to 1.5
-  const [speakerBoost, setSpeakerBoost] = useState<boolean>(true);
+  const [expressiveness, setExpressiveness] = useState<number>(0.5);
+  const [speed, setSpeed] = useState<number>(1.0);
 
   // Studio State
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeGeneration, setActiveGeneration] = useState<Generation | null>(null);
   const [moderationError, setModerationError] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [deviceFallbackAvailable, setDeviceFallbackAvailable] = useState(false);
 
   // Credit calculation
   const charCount = text.length;
@@ -61,6 +57,12 @@ export default function TextToSpeechStudio() {
     return generations.filter((g) => g.type === "tts");
   }, [generations]);
 
+  useEffect(() => {
+    const voiceId = new URLSearchParams(window.location.search).get("voice");
+    const linkedVoice = voices.find((voice) => voice.id === voiceId);
+    if (linkedVoice) setSelectedVoice(linkedVoice);
+  }, [voices]);
+
   // Insert SSML helper
   const insertTag = (tag: string) => {
     setText((prev) => `${prev} ${tag} `);
@@ -69,56 +71,48 @@ export default function TextToSpeechStudio() {
   const handleGenerate = async () => {
     if (!text.trim()) return;
     setModerationError(null);
+    setGenerationError(null);
+    setDeviceFallbackAvailable(false);
 
-    // 1. Content Moderation Check
     const modResult = moderateText(text, "tts");
     if (!modResult.passed) {
       setModerationError(modResult.reason || "Content policy violation detected.");
       return;
     }
 
-    // 2. Credit check and deduction
-    const deducted = await deductCredits(estimatedCost);
-    if (!deducted) return;
-
     setIsGenerating(true);
-
-    setTimeout(() => {
-      // 3. Procedural Synthesis
-      const { audioUrl, duration } = synthesizeTTSVoice(text, {
-        voicePitch: selectedVoice.pitch,
-        speed: speed,
-        stability: stability,
-        similarity: similarity,
-        styleExaggeration: styleExaggeration,
-        tone: selectedVoice.tone,
+    try {
+      const speech = await requestSpeech({
+        text,
+        voiceId: selectedVoice.id,
+        speed,
+        language,
+        expressiveness,
       });
+      if (speech.creditsRemaining !== null) syncCreditBalance(speech.creditsRemaining);
 
       const newGen = addGeneration({
         type: "tts",
-        title: `${selectedVoice.name} — ${text.substring(0, 32)}...`,
+        title: `${selectedVoice.name} — ${text.substring(0, 32)}${text.length > 32 ? "…" : ""}`,
         prompt: text,
         voiceId: selectedVoice.id,
         voiceName: selectedVoice.name,
-        model: model,
-        audioUrl: audioUrl,
-        duration: duration,
-        costCredits: estimatedCost,
+        model: TTS_MODEL_NAME,
+        audioUrl: speech.audioUrl,
+        duration: speech.duration,
+        costCredits: speech.costCredits || estimatedCost,
         status: "completed",
-        params: {
-          stability,
-          similarity,
-          styleExaggeration,
-          speed,
-          speakerBoost,
-          language,
-        },
-        watermarked: true,
+        params: { expressiveness, speed, language },
+        watermarked: false,
       });
 
       setActiveGeneration(newGen);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Speech generation failed. Please try again.");
+      setDeviceFallbackAvailable(error instanceof SpeechRequestError && error.status === 502);
+    } finally {
       setIsGenerating(false);
-    }, 700);
+    }
   };
 
   return (
@@ -129,42 +123,21 @@ export default function TextToSpeechStudio() {
           <h1 className="text-2xl font-bold font-heading text-white flex items-center gap-2.5">
             <span>Text to Speech Studio</span>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-brand-violet/20 text-brand-cyan border border-brand-violet/30 font-mono">
-              EGVL 2.4
+              Live TTS
             </span>
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Transform text into natural, expressive speech with millisecond latency and custom voice styles.
+            Turn your script into real speech, then tune the delivery and pacing for each voice.
           </p>
         </div>
 
-        {/* Model & Language Quick Toggles */}
-        <div className="flex items-center gap-3 text-xs">
-          {/* Model Selector */}
-          <div className="flex rounded-xl bg-zinc-900 p-1 border border-zinc-800">
-            <button
-              onClick={() => setModel("EGVL Turbo")}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                model === "EGVL Turbo"
-                  ? "bg-white text-black font-semibold shadow-sm"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              Turbo (Low Latency)
-            </button>
-            <button
-              onClick={() => setModel("EGVL Multilingual")}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                model === "EGVL Multilingual"
-                  ? "bg-white text-black font-semibold shadow-sm"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              Multilingual (Hi-Fi)
-            </button>
-          </div>
-
-          {/* Language Selector */}
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="inline-flex items-center gap-2 rounded-xl border border-brand-cyan/20 bg-brand-cyan/10 px-3 py-2 font-medium text-brand-cyan">
+            <Sparkles className="h-3.5 w-3.5" /> {TTS_MODEL_NAME}
+          </span>
+          <label className="sr-only" htmlFor="tts-language">Output language</label>
           <select
+            id="tts-language"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs focus:outline-none focus:border-brand-violet"
@@ -189,6 +162,24 @@ export default function TextToSpeechStudio() {
         </div>
       )}
 
+      {generationError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">
+          <span>{generationError}</span>
+          {deviceFallbackAvailable && (
+            <VoicePreviewButton
+              voice={selectedVoice}
+              sampleText={text}
+              speed={speed}
+              language={language}
+              browserOnly
+              label="Speak on this device"
+              playingLabel="Speaking"
+              className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-zinc-950"
+            />
+          )}
+        </div>
+      )}
+
       {/* Main Studio Work Area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Editor & Voice Picker (2 Cols) */}
@@ -199,10 +190,10 @@ export default function TextToSpeechStudio() {
             onSelectVoice={(v) => setSelectedVoice(v)}
           />
 
-          {/* SSML Tag Shortcuts */}
+          {/* Delivery cue shortcuts */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              SSML Tags:
+              Delivery cues:
             </span>
             {[
               { label: "[pause 1s]", tag: "[pause 1s]" },
@@ -212,6 +203,7 @@ export default function TextToSpeechStudio() {
               { label: "[sigh]", tag: "[sigh]" },
             ].map((item) => (
               <button
+                type="button"
                 key={item.tag}
                 onClick={() => insertTag(item.tag)}
                 className="px-2.5 py-1 rounded-lg bg-zinc-900/80 hover:bg-brand-violet/20 border border-zinc-800 hover:border-brand-violet/40 text-[11px] font-mono text-brand-cyan transition-colors"
@@ -229,6 +221,7 @@ export default function TextToSpeechStudio() {
               rows={8}
               maxLength={maxChars}
               placeholder="Type or paste your text here to synthesize speech... (Up to 5,000 characters)"
+              aria-label="Text to synthesize"
               className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none resize-none leading-relaxed"
             />
 
@@ -269,14 +262,15 @@ export default function TextToSpeechStudio() {
 
           {/* Generated Waveform Player Display */}
           {activeGeneration && (
-            <div className="pt-2 animate-in fade-in duration-200">
-              <WaveformPlayer
-                audioUrl={activeGeneration.audioUrl}
-                duration={activeGeneration.duration}
-                title={activeGeneration.title}
-                subtitle={`Voice: ${activeGeneration.voiceName} • Model: ${activeGeneration.model}`}
-                autoPlay={true}
-              />
+              <div className="pt-2 voice-result-enter">
+                <WaveformPlayer
+                  audioUrl={activeGeneration.audioUrl}
+                  duration={activeGeneration.duration}
+                  title={activeGeneration.title}
+                  subtitle={`Voice: ${activeGeneration.voiceName} • ${activeGeneration.model} • Download to keep`}
+                  autoPlay={true}
+                  watermarked={activeGeneration.watermarked}
+                />
             </div>
           )}
         </div>
@@ -294,11 +288,8 @@ export default function TextToSpeechStudio() {
               </div>
               <button
                 onClick={() => {
-                  setStability(0.75);
-                  setSimilarity(0.85);
-                  setStyleExaggeration(0.15);
+                  setExpressiveness(0.5);
                   setSpeed(1.0);
-                  setSpeakerBoost(true);
                 }}
                 className="text-[11px] text-zinc-500 hover:text-white flex items-center gap-1"
                 title="Reset sliders"
@@ -307,76 +298,36 @@ export default function TextToSpeechStudio() {
               </button>
             </div>
 
-            {/* Stability */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-300 font-medium">Stability</span>
-                <span className="text-zinc-400 font-mono">{Math.round(stability * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={stability}
-                onChange={(e) => setStability(parseFloat(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-violet"
-              />
-              <div className="flex justify-between text-[10px] text-zinc-500">
-                <span>More expressive</span>
-                <span>More stable</span>
-              </div>
-            </div>
 
-            {/* Similarity */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-300 font-medium">Clarity & Similarity</span>
-                <span className="text-zinc-400 font-mono">{Math.round(similarity * 100)}%</span>
+                <label htmlFor="voice-expressiveness" className="text-zinc-300 font-medium">Expression</label>
+                <span className="text-zinc-400 font-mono">{Math.round(expressiveness * 100)}%</span>
               </div>
               <input
+                id="voice-expressiveness"
                 type="range"
                 min={0}
                 max={1}
                 step={0.05}
-                value={similarity}
-                onChange={(e) => setSimilarity(parseFloat(e.target.value))}
+                value={expressiveness}
+                onChange={(e) => setExpressiveness(parseFloat(e.target.value))}
                 className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-brand-cyan"
               />
               <div className="flex justify-between text-[10px] text-zinc-500">
-                <span>Low</span>
-                <span>High resemblance</span>
-              </div>
-            </div>
-
-            {/* Style Exaggeration */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-300 font-medium">Style Exaggeration</span>
-                <span className="text-zinc-400 font-mono">{Math.round(styleExaggeration * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={styleExaggeration}
-                onChange={(e) => setStyleExaggeration(parseFloat(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-zinc-400"
-              />
-              <div className="flex justify-between text-[10px] text-zinc-500">
-                <span>Neutral</span>
-                <span>Dramatic energy</span>
+                <span>Understated</span>
+                <span>Dynamic</span>
               </div>
             </div>
 
             {/* Speed */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-300 font-medium">Pacing / Speed</span>
+                <label htmlFor="voice-speed" className="text-zinc-300 font-medium">Pacing / Speed</label>
                 <span className="text-zinc-400 font-mono">{speed.toFixed(2)}x</span>
               </div>
               <input
+                id="voice-speed"
                 type="range"
                 min={0.7}
                 max={1.5}
@@ -392,26 +343,6 @@ export default function TextToSpeechStudio() {
               </div>
             </div>
 
-            {/* Speaker Boost Toggle */}
-            <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80">
-              <div>
-                <span className="text-xs font-semibold text-zinc-200 block">Speaker Boost</span>
-                <span className="text-[10px] text-zinc-400">Boost vocal presence & harmonics</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSpeakerBoost(!speakerBoost)}
-                className={`w-10 h-5 rounded-full transition-colors relative ${
-                  speakerBoost ? "bg-brand-cyan" : "bg-zinc-800"
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full bg-black absolute top-0.5 transition-transform ${
-                    speakerBoost ? "translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </div>
           </div>
 
           {/* Past Generations History Card */}

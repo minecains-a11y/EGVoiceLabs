@@ -221,10 +221,10 @@ export function StudioSidebar() {
       <div className="mt-auto p-3 rounded-2xl bg-zinc-900 border border-brand-violet/20">
         <div className="flex items-center gap-2 text-white font-semibold text-xs mb-1">
           <AudioWaveform className="w-4 h-4 text-brand-cyan animate-pulse" />
-          <span>EGVL Neural Engine</span>
+          <span>Live speech engine</span>
         </div>
         <p className="text-[11px] text-zinc-400 leading-tight">
-          XTTS-v2 & Stable Audio Open high-fidelity synthesis pipeline.
+          Gemini TTS with a device-voice fallback for previews.
         </p>
       </div>
     </aside>

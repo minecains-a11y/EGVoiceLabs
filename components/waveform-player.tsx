@@ -23,6 +23,7 @@ interface WaveformPlayerProps {
   autoPlay?: boolean;
   className?: string;
   onEnded?: () => void;
+  watermarked?: boolean;
 }
 
 export function WaveformPlayer({
@@ -33,6 +34,7 @@ export function WaveformPlayer({
   autoPlay = false,
   className = "",
   onEnded,
+  watermarked = false,
 }: WaveformPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -206,11 +208,11 @@ export function WaveformPlayer({
             {title && <h4 className="text-sm font-semibold text-white truncate">{title}</h4>}
             {subtitle && <p className="text-xs text-zinc-400 truncate">{subtitle}</p>}
           </div>
-          <div className="flex items-center gap-2">
+          {watermarked && (
             <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 font-medium">
               <Sparkles className="w-3 h-3" /> EGVL Watermarked
             </span>
-          </div>
+          )}
         </div>
       )}
 

@@ -2,17 +2,12 @@
 
 import React, { useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { PREMADE_VOICES } from "@/lib/mock-data";
-import { synthesizeTTSVoice } from "@/lib/audio-synth";
+import { VoicePreviewButton } from "@/components/voice-preview-button";
 import {
   Users2,
   Search,
-  Filter,
-  Volume2,
-  Sparkles,
   Bookmark,
   BookmarkCheck,
-  Star,
   Mic2,
   Share2,
   Check,
@@ -24,7 +19,6 @@ export default function VoiceMarketplacePage() {
   const [search, setSearch] = useState("");
   const [accentFilter, setAccentFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState("all");
-  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const filteredVoices = voices.filter((v) => {
@@ -36,21 +30,6 @@ export default function VoiceMarketplacePage() {
     const matchGender = genderFilter === "all" || v.gender === genderFilter;
     return matchSearch && matchAccent && matchGender;
   });
-
-  const handlePreviewVoice = (v: any) => {
-    if (playingVoiceId === v.id) {
-      setPlayingVoiceId(null);
-      return;
-    }
-    setPlayingVoiceId(v.id);
-    const { audioUrl, duration } = synthesizeTTSVoice(
-      `Welcome to EGVoiceLabs. This is ${v.name}, ready to elevate your creative productions.`,
-      { voicePitch: v.pitch, speed: v.speed, tone: v.tone }
-    );
-    const audio = new Audio(audioUrl);
-    audio.play().catch(console.error);
-    setTimeout(() => setPlayingVoiceId(null), duration * 1000);
-  };
 
   const handleShare = (id: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/voices#${id}`);
@@ -65,19 +44,24 @@ export default function VoiceMarketplacePage() {
         <div>
           <h1 className="text-3xl font-bold font-heading text-white flex items-center gap-3">
             <Users2 className="w-8 h-8 text-brand-cyan" />
-            <span>Public Voice Library</span>
+            <span>Voice Library</span>
           </h1>
           <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-            Discover thousands of high-fidelity synthetic, cloned, and verified narrator voices for your projects.
+            Preview each speaker live, then bring that preset into your studio. Device speech is available when AI audio is offline.
           </p>
         </div>
 
         <Link
-          href="/studio/clone"
+          href="/studio/design"
           className="px-4 py-2.5 rounded-xl bg-white text-black text-xs font-bold shadow-md hover:scale-105 active:scale-95 transition-all"
         >
-          + Clone & Publish Voice
+          + Create Voice Profile
         </Link>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
+        <span className="rounded-full border border-brand-cyan/20 bg-brand-cyan/10 px-3 py-1 text-brand-cyan">{voices.length} voice presets</span>
+        <span>Custom profiles are approximations, not source-voice clones. Audio is rendered on demand.</span>
       </div>
 
       {/* Filters & Search */}
@@ -86,7 +70,8 @@ export default function VoiceMarketplacePage() {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
-            placeholder="Search by voice name, vibe, or style..."
+            placeholder="Search by name, accent, or style..."
+            aria-label="Search voices"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-brand-cyan"
@@ -96,6 +81,7 @@ export default function VoiceMarketplacePage() {
         <div className="flex items-center gap-2 text-xs">
           {/* Gender */}
           <select
+            aria-label="Filter by gender"
             value={genderFilter}
             onChange={(e) => setGenderFilter(e.target.value)}
             className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 focus:outline-none"
@@ -108,6 +94,7 @@ export default function VoiceMarketplacePage() {
 
           {/* Accent */}
           <select
+            aria-label="Filter by accent"
             value={accentFilter}
             onChange={(e) => setAccentFilter(e.target.value)}
             className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 focus:outline-none"
@@ -122,104 +109,91 @@ export default function VoiceMarketplacePage() {
       </div>
 
       {/* Voice Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredVoices.map((voice) => {
-          const isPlaying = playingVoiceId === voice.id;
-          return (
-            <div
-              key={voice.id}
-              id={voice.id}
-              className="p-5 rounded-2xl bg-[#141414] border border-zinc-800 hover:border-brand-violet/50 transition-all flex flex-col justify-between group shadow-lg"
-            >
-              <div>
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-brand-violet/30 flex items-center justify-center font-heading font-extrabold text-white text-base shadow-inner">
-                      {voice.name.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <h4 className="font-heading font-bold text-base text-white group-hover:text-brand-cyan transition-colors">
-                        {voice.name}
-                      </h4>
-                      <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-                        <span>{voice.accent}</span>
-                        <span>•</span>
-                        <span className="capitalize">{voice.gender}</span>
-                      </div>
-                    </div>
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+        {filteredVoices.map((voice, index) => (
+          <article
+            key={voice.id}
+            id={voice.id}
+            style={{ animationDelay: `${Math.min(index * 45, 360)}ms` }}
+            className="voice-card-enter group flex flex-col justify-between rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-5 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-brand-cyan/40 hover:shadow-brand-cyan/5"
+          >
+            <div>
+              <div className="mb-3 flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-violet/30 bg-zinc-800 font-heading text-base font-extrabold text-white shadow-inner">
+                    {voice.name.substring(0, 2).toUpperCase()}
                   </div>
-
-                  <div className="flex items-center gap-1 text-zinc-400">
-                    <button
-                      onClick={() => toggleFavoriteVoice(voice.id)}
-                      className="p-1.5 hover:text-zinc-400 transition-colors"
-                      title="Bookmark"
-                    >
-                      {voice.isFavorite ? (
-                        <BookmarkCheck className="w-4 h-4 text-zinc-400" />
-                      ) : (
-                        <Bookmark className="w-4 h-4" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleShare(voice.id)}
-                      className="p-1.5 hover:text-white transition-colors"
-                      title="Share link"
-                    >
-                      {copiedId === voice.id ? (
-                        <Check className="w-4 h-4 text-zinc-400" />
-                      ) : (
-                        <Share2 className="w-4 h-4" />
-                      )}
-                    </button>
+                  <div>
+                    <h2 className="font-heading text-base font-bold text-white transition-colors group-hover:text-brand-cyan">
+                      {voice.name}
+                    </h2>
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                      <span>{voice.accent}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="capitalize">{voice.gender}</span>
+                    </div>
                   </div>
                 </div>
 
-                <p className="text-xs text-zinc-400 line-clamp-2 mb-4 leading-relaxed">
-                  {voice.description}
-                </p>
-
-                {/* Rating & Labels */}
-                <div className="flex items-center justify-between text-xs mb-4">
-                  <div className="flex items-center gap-1 text-zinc-400 font-semibold font-mono text-[11px]">
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                    <span>{voice.qualityRating || 4.9}</span>
-                    <span className="text-zinc-500 font-normal">
-                      ({(voice.sampleCount || 12000).toLocaleString()} gens)
-                    </span>
-                  </div>
-
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-brand-cyan font-medium">
-                    {voice.useCase}
-                  </span>
+                <div className="flex items-center gap-1 text-zinc-400">
+                  <button
+                    type="button"
+                    onClick={() => toggleFavoriteVoice(voice.id)}
+                    className="rounded-lg p-1.5 transition-colors hover:text-zinc-200"
+                    title={voice.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    aria-label={voice.isFavorite ? `Remove ${voice.name} from favorites` : `Add ${voice.name} to favorites`}
+                    aria-pressed={Boolean(voice.isFavorite)}
+                  >
+                    {voice.isFavorite ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShare(voice.id)}
+                    className="rounded-lg p-1.5 transition-colors hover:text-white"
+                    title="Share link"
+                    aria-label={`Copy a link to ${voice.name}`}
+                  >
+                    {copiedId === voice.id ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 
-              {/* Actions Footer */}
-              <div className="flex items-center gap-2 pt-3 border-t border-zinc-800/80">
-                <button
-                  onClick={() => handlePreviewVoice(voice)}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
-                    isPlaying
-                      ? "bg-white text-black"
-                      : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
-                  }`}
-                >
-                  <Volume2 className="w-4 h-4" />
-                  <span>{isPlaying ? "Playing Sample..." : "Play Preview"}</span>
-                </button>
+              <p className="mb-4 line-clamp-2 text-xs leading-relaxed text-zinc-400">{voice.description}</p>
 
-                <Link
-                  href="/studio/tts"
-                  className="px-4 py-2.5 rounded-xl bg-white text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all flex items-center gap-1"
-                >
-                  <Mic2 className="w-3.5 h-3.5" />
-                  <span>Use Voice</span>
-                </Link>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                {voice.labels.slice(0, 2).map((label) => (
+                  <span key={label} className="rounded-full border border-zinc-800 bg-zinc-950/70 px-2.5 py-1 text-[10px] text-zinc-300">
+                    {label}
+                  </span>
+                ))}
+                <span className="rounded-full border border-brand-cyan/20 bg-brand-cyan/10 px-2.5 py-1 text-[10px] font-medium text-brand-cyan">
+                  {voice.useCase}
+                </span>
               </div>
             </div>
-          );
-        })}
+
+            <div className="flex items-center gap-2 border-t border-zinc-800/80 pt-3">
+              <VoicePreviewButton
+                voice={voice}
+                label="Play preview"
+                playingLabel="Playing sample"
+                className="flex-1 rounded-xl bg-zinc-800 py-2.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 aria-pressed:bg-brand-cyan aria-pressed:text-zinc-950"
+              />
+              <Link
+                href={`/studio/tts?voice=${encodeURIComponent(voice.id)}`}
+                className="flex items-center gap-1 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-black transition-all hover:scale-105 active:scale-95"
+              >
+                <Mic2 className="h-3.5 w-3.5" />
+                <span>Use Voice</span>
+              </Link>
+            </div>
+          </article>
+        ))}
+        {filteredVoices.length === 0 && (
+          <div className="col-span-full rounded-2xl border border-zinc-800 bg-zinc-900/50 px-6 py-12 text-center text-sm text-zinc-400">
+            No voices match those filters. Try a different accent or search term.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "ai": "^7.0.169",
     "better-auth": "^1.7.20",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.4",

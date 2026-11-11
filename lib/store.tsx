@@ -15,6 +15,7 @@ interface AppContextType extends InitialAppData {
   deleteGeneration: (id: string) => void;
   toggleFavoriteGeneration: (id: string) => void;
   deductCredits: (amount: number) => Promise<boolean>;
+  syncCreditBalance: (credits: number) => void;
   saveProject: (project: Project) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (project: Project | null) => void;
@@ -153,6 +154,11 @@ export function AppProvider({
     save("generations", updated);
   };
 
+  const syncCreditBalance = (credits: number) => {
+    if (!Number.isSafeInteger(credits) || credits < 0) return;
+    setUser((current) => (current ? { ...current, credits } : current));
+  };
+
   const deductCredits = async (amount: number) => {
     if (!user) {
       window.location.assign("/login");
@@ -230,6 +236,7 @@ export function AppProvider({
         deleteGeneration,
         toggleFavoriteGeneration,
         deductCredits,
+        syncCreditBalance,
         saveProject,
         deleteProject,
         setActiveProject: setCurrentActiveProject,
